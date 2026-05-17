@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NCS Search Web</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">NCS Search</div>
+      <nav class="tabs">
+        <button id="tabCategoryBtn" class="tab active">분류로 찾기</button>
+        <button id="tabNaturalBtn" class="tab">자연어로 찾기</button>
+      </nav>
+      <div class="auth">
+        <span id="modeBadge" class="badge">게스트 모드</span>
+        <button id="modeToggleBtn" class="small-btn">회원 모드 전환</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="categoryTab" class="tab-page active">
+        <div class="grid3">
+          <aside class="panel">
+            <h3>NCS 분류 트리</h3>
+            <input id="treeFilterInput" class="input" placeholder="분류명 검색" />
+            <div id="categoryTree" class="tree"></div>
+          </aside>
+          <section class="panel">
+            <h3>선택 분류 상세</h3>
+            <div id="categoryDetail" class="detail-empty">세분류를 선택하세요.</div>
+            <button id="jumpToNaturalBtn" class="primary-btn" disabled>자연어 검색으로 확장</button>
+          </section>
+          <section class="panel">
+            <h3>세분류별 능력단위</h3>
+            <div id="subcategoryUnits" class="list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="naturalTab" class="tab-page">
+        <div class="panel hero">
+          <input id="queryInput" class="input hero-input" placeholder="예: 총무팀에서 급여계산 업무를 수행하고 있어" />
+          <button id="searchBtn" class="primary-btn">검색</button>
+          <button id="downloadBtn" class="small-btn">기본 NCS 다운로드</button>
+          <div class="chips">
+            <button class="chip">근태관리 업무</button>
+            <button class="chip">회의 준비</button>
+            <button class="chip">고객 비대면 상담</button>
+            <button class="chip">자동차 조립공정 작업</button>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <section class="panel">
+            <h3>결과</h3>
+            <div class="result-tabs">
+              <button data-result-tab="full" class="result-tab active">통합</button>
+              <button data-result-tab="jobs" class="result-tab">직무</button>
+              <button data-result-tab="units" class="result-tab">능력단위</button>
+              <button data-result-tab="subcategories" class="result-tab">세분류</button>
+            </div>
+            <div id="resultList" class="list"></div>
+          </section>
+          <section class="panel">
+            <h3>상세</h3>
+            <div id="resultDetail" class="detail-empty">결과 카드를 선택하세요.</div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div id="memberModal" class="modal hidden">
+      <div class="modal-content">
+        <h3>회원 전용 기능</h3>
+        <p>능력단위 구조도 조회는 회원 모드에서 사용할 수 있습니다.</p>
+        <div class="modal-actions">
+          <button id="memberSwitchBtn" class="primary-btn">회원 모드 전환</button>
+          <button id="memberCloseBtn" class="small-btn">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,90 @@
+너는 검색 품질 검증, 추천 알고리즘 튜닝, PostgreSQL 검색 로직 개발에 능숙한 개발자다.
+
+현재 NCS 추천 시스템은 T25_NCS_SEARCH_INDEX까지 생성된 상태다.
+
+이번 단계의 목표는 사용자의 입력문을 기반으로 세분류, 직무, 능력단위 추천 품질을 검증하고 튜닝하는 것이다.
+
+요청사항:
+
+1. T26_SEARCH_TEST_CASES 테이블을 활용해 검색 테스트 코드를 작성해줘.
+2. 결과는 pandas DataFrame으로 보기 좋게 출력해줘.
+3. 함수 단위로 분리해줘.
+4. README.md에 테스트 실행 방법을 작성해줘.
+
+테스트 입력 유형:
+
+- 부서명 입력
+  예: 품질팀, 생산관리팀, 인사팀
+
+- 직무명 입력
+  예: 품질검사, 생산계획, 채용관리
+
+- 직무 설명 입력
+  예: 불량 원인을 분석하고 개선대책을 수립한다
+
+- 복합 입력
+  예: 품질팀에서 수입검사와 불량 개선 업무를 수행한다
+
+검색 규칙:
+
+1. 입력 문장을 정규화하는 함수를 작성해줘.
+2. T21_DEPARTMENT_DICTIONARY에서 부서명 동의어를 탐지해줘.
+3. T22_JOB_DICTIONARY에서 직무명 동의어를 탐지해줘.
+4. 부서명이 감지되면 T23_DEPARTMENT_JOB_MAPPING에서 직무 후보를 추천해줘.
+5. 직무명이 감지되면 T24_JOB_UNIT_MAPPING에서 능력단위 후보를 추천해줘.
+6. 직무 설명 또는 복합 입력인 경우 T25_NCS_SEARCH_INDEX에서 키워드 기반 검색을 수행해줘.
+7. PostgreSQL Full Text Search는 plainto_tsquery 또는 websearch_to_tsquery 기반으로 구현해줘.
+
+세분류 추천:
+
+1. 세분류 추천은 subcategory_code 기준으로 groupby 하여 Top 3를 반환해줘.
+2. 세분류 추천 결과에는 다음 필드를 포함해줘.
+
+- subcategory_code
+- subcategory_name
+- score
+- matched_keywords
+- reason
+
+능력단위 추천:
+
+1. 능력단위 추천 결과에는 다음 필드를 포함해줘.
+
+- unit_category_id
+- unit_name
+- unit_element_id
+- unit_element_name
+- score
+- reason
+
+검색 점수:
+
+1. 검색 점수는 다음으로 분리해줘.
+
+- keyword_score
+- dictionary_score
+- mapping_score
+- vector_score
+- final_score
+
+2. final_score 계산식은 코드 상단 상수로 관리해줘.
+
+검증:
+
+1. T26_SEARCH_TEST_CASES 기대값과 실제 결과를 비교해 success/fail을 표시해줘.
+2. 전체 테스트 건수 출력
+3. 성공 건수 출력
+4. 실패 건수 출력
+5. 성공률 출력
+6. 실패 케이스는 CSV로 저장해줘.
+
+로그 저장:
+
+1. 검색 결과는 T28_SEARCH_RESULT_LOG에 저장해줘.
+2. matched_keywords와 reason을 반드시 저장해줘.
+
+향후 확장:
+
+1. 현재 단계에서는 pgvector 실제 검색은 구현하지 않는다.
+2. vector_search 함수 구조만 생성해줘.
+3. 향후 embedding API를 연결할 수 있도록 함수 구조를 분리해줘.

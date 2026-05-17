@@ -1,0 +1,58 @@
+
+이 프로젝트는 NCS 기준정보를 기반으로 사용자가 부서명, 직무명, 직무 설명 또는 복합 문장을 입력했을 때 적합한 세분류, 수행직무, NCS 능력단위를 추천하는 시스템이다.
+
+개발 원칙은 다음과 같다.
+
+1. PostgreSQL을 기본 DB로 사용한다.
+2. NCS 원본 데이터는 T11~T15 테이블에 보존한다.
+3. 전처리 및 검색용 데이터는 T25_NCS_SEARCH_INDEX에 생성한다.
+4. 동의어, 부서-직무 매핑, 직무-능력단위 매핑은 T21~T24에 관리한다.
+5. 검색 테스트 케이스는 T26_SEARCH_TEST_CASES에 관리한다.
+6. 향후 pgvector 기반 의미 검색 확장을 위해 T27_NCS_EMBEDDINGS를 사용한다.
+7. 현재 단계에서는 실제 vector 컬럼 없이 embedding_text만 저장한다.
+8. 검색 결과와 추천 점수는 T28_SEARCH_RESULT_LOG에 저장한다.
+9. 초기 검색은 키워드 기반으로 구현하되, 구조는 pgvector 하이브리드 검색까지 확장 가능해야 한다.
+10. 추천 결과는 세분류 추천 → 직무 추천 → 능력단위 추천 순서로 구성한다.
+11. 세분류 추천 결과에는 적합도 점수와 추천 근거를 포함한다.
+12. 능력단위 추천 결과에는 능력단위코드, 능력단위명, 능력단위요소명, 추천 점수, 추천 근거를 포함한다.
+13. 코드는 초보자도 이해할 수 있도록 주석을 충분히 작성한다.
+14. DB 접속정보는 .env 파일에서 읽는다.
+15. README.md에는 실행 순서와 테스트 방법을 반드시 작성한다.
+16. 한 번에 전체를 만들지 말고 단계별로 작동 여부를 검증한다.
+
+중요한 기준:
+
+1. T11_NCS_UNITS의 PK는 id_t11이다.
+2. unit_element_id는 중복 가능성이 있으므로 UNIQUE로 사용하지 않는다.
+3. 수행준거(T12)와 KSA(T13)는 원본 NCS 구조상 unit_element_id 기준으로 연결된다.
+4. 단, unit_element_id 중복 가능성이 있으므로 전처리 시 다음 복합 조건으로 조인한다.
+
+T11.unit_element_id = T12.unit_element_id
+AND T11.unit_category_id = T12.unit_category_id
+
+T11.unit_element_id = T13.unit_element_id
+AND T11.unit_category_id = T13.unit_category_id
+
+5. T14_SUBCATEGORY_DEFINITIONS는 subcategory_code 기준으로 T11과 조인한다.
+
+T11.subcategory_code = T14.subcategory_code
+
+6. T15_UNIT_DEFINITIONS는 unit_category_id 기준으로 T11과 조인한다.
+
+T11.unit_category_id = T15.unit_category_id
+
+7. T25_NCS_SEARCH_INDEX 생성 시 T11_NCS_UNITS를 중심 테이블로 사용한다.
+8. T25 생성 시 수행준거와 KSA는 위 조인 규칙에 따라 통합한다.
+9. 검색 우선순위는 다음 순서로 처리한다.
+
+- 부서명 사전 매칭
+- 직무명 사전 매칭
+- 직무-능력단위 매핑
+- T25 키워드 검색
+- PostgreSQL Full Text Search
+- 향후 vector search 확장
+
+10. PostgreSQL Full Text Search는 to_tsvector 기반으로 생성한다.
+11. 검색 시 plainto_tsquery 또는 websearch_to_tsquery 사용을 우선 고려한다.
+12. id_t11은 DB 내부 관리용 PK이다.
+13. 원본 NCS 데이터 연결 기준은 unit_element_id + unit_category_id이다.
