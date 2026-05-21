@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException
 
+from app.config import load_settings
 from app.db import ping_db
 
 router = APIRouter(prefix="/api", tags=["health"])
@@ -11,6 +14,13 @@ router = APIRouter(prefix="/api", tags=["health"])
 def health() -> dict:
     try:
         ping_db()
-        return {"status": "ok", "database": "connected"}
+        settings = load_settings()
+        return {
+            "status": "ok",
+            "database": "connected",
+            "app_version": settings.app_version,
+            "deploy_commit": os.getenv("RAILWAY_GIT_COMMIT_SHA", ""),
+            "web_asset": "20260523-deploy-final",
+        }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"DB health check failed: {exc}") from exc
