@@ -20,7 +20,7 @@ def health() -> dict:
             "database": "connected",
             "app_version": settings.app_version,
             "deploy_commit": os.getenv("RAILWAY_GIT_COMMIT_SHA", ""),
-            "web_asset": "20260523-deploy-final",
+            "web_asset": "20260523-final",
         }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"DB health check failed: {exc}") from exc
