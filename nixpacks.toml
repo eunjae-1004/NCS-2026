@@ -1,0 +1,3 @@
+# Railway Nixpacks — FastAPI 시작 명령 (Procfile과 동일)
+[start]
+cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"

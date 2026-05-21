@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.db import get_connection
+
+logger = logging.getLogger("ncs-api")
 
 
 def save_search_log(
@@ -67,5 +72,9 @@ def save_search_log(
         "matched_keywords": matched_keywords,
         "recommendation_reason": recommendation_reason,
     }
-    with get_connection() as conn:
-        conn.execute(text(sql), params)
+    try:
+        with get_connection() as conn:
+            conn.execute(text(sql), params)
+    except IntegrityError as exc:
+        # CSV Import 후 log_id 시퀀스가 어긋나면 검색 자체는 성공시키고 로그만 건너뜀
+        logger.warning("search log insert skipped: %s", exc)

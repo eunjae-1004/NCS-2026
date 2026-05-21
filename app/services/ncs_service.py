@@ -8,6 +8,51 @@ from sqlalchemy import text
 from app.db import get_connection
 
 
+def get_unit_ncs_meta(unit_category_id: str) -> dict | None:
+    """
+    능력단위 ID 기준 세분류·계층 메타 (T11 우선, T25 보조).
+    """
+    uid = unit_category_id.strip()
+    if not uid:
+        return None
+
+    sql_t11 = """
+    SELECT
+        unit_category_id,
+        unit_name,
+        subcategory_code,
+        subcategory_name,
+        major_category_name,
+        middle_category_name,
+        minor_category_name
+    FROM T11_NCS_UNITS
+    WHERE unit_category_id = :unit_category_id
+    ORDER BY id_t11
+    LIMIT 1
+    """
+    with get_connection() as conn:
+        row = conn.execute(text(sql_t11), {"unit_category_id": uid}).mappings().first()
+        if row:
+            return dict(row)
+
+        sql_t25 = """
+        SELECT
+            unit_category_id,
+            unit_name,
+            subcategory_code,
+            subcategory_name,
+            major_category_name,
+            middle_category_name,
+            minor_category_name
+        FROM T25_NCS_SEARCH_INDEX
+        WHERE unit_category_id = :unit_category_id
+        ORDER BY search_index_id ASC
+        LIMIT 1
+        """
+        row = conn.execute(text(sql_t25), {"unit_category_id": uid}).mappings().first()
+    return dict(row) if row else None
+
+
 def get_ncs_tree() -> list[dict]:
     sql = """
     SELECT DISTINCT
@@ -22,11 +67,7 @@ def get_ncs_tree() -> list[dict]:
       AND coalesce(minor_category_name, '') <> ''
       AND coalesce(subcategory_code, '') <> ''
       AND coalesce(subcategory_name, '') <> ''
-    ORDER BY
-        major_category_name,
-        middle_category_name,
-        minor_category_name,
-        subcategory_code
+    ORDER BY subcategory_code
     """
     with get_connection() as conn:
         rows = conn.execute(text(sql)).mappings().all()
@@ -59,7 +100,28 @@ def get_ncs_tree() -> list[dict]:
 
         minor_map[minor_key]["children"].append({"code": sub_code, "name": sub_name})
 
-    return list(major_map.values())
+    tree = list(major_map.values())
+    _sort_ncs_tree_by_code(tree)
+    return tree
+
+
+def _ncs_tree_sort_key(node: dict) -> str:
+    """대/중/소/세 계층을 세분류 코드(subcategory_code) 기준 오름차순으로 정렬한다."""
+    code = str(node.get("code") or "").strip()
+    if code.isdigit():
+        return code.zfill(8)
+    children = node.get("children") or []
+    if children:
+        return min(_ncs_tree_sort_key(child) for child in children)
+    return code
+
+
+def _sort_ncs_tree_by_code(nodes: list[dict]) -> None:
+    nodes.sort(key=_ncs_tree_sort_key)
+    for node in nodes:
+        children = node.get("children")
+        if children:
+            _sort_ncs_tree_by_code(children)
 
 
 def get_unit_structure(unit_category_id: str) -> dict | None:

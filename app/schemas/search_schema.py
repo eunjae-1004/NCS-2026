@@ -11,6 +11,9 @@ class QueryRequest(BaseModel):
 class SubcategoryRecommendation(BaseModel):
     subcategory_code: str
     subcategory_name: str
+    major_category_name: str | None = None
+    middle_category_name: str | None = None
+    minor_category_name: str | None = None
     keyword_score: float
     vector_score: float
     final_score: float
@@ -20,6 +23,11 @@ class SubcategoryRecommendation(BaseModel):
 
 class JobRecommendation(BaseModel):
     job_name: str
+    major_category_name: str | None = None
+    middle_category_name: str | None = None
+    minor_category_name: str | None = None
+    subcategory_code: str | None = None
+    subcategory_name: str | None = None
     keyword_score: float
     vector_score: float
     final_score: float
@@ -29,8 +37,14 @@ class JobRecommendation(BaseModel):
 class UnitRecommendation(BaseModel):
     unit_category_id: str
     unit_name: str
+    unit_definition: str | None = None
     unit_element_id: str
     unit_element_name: str
+    major_category_name: str | None = None
+    middle_category_name: str | None = None
+    minor_category_name: str | None = None
+    subcategory_code: str | None = None
+    subcategory_name: str | None = None
     keyword_score: float
     vector_score: float
     final_score: float
@@ -51,9 +65,56 @@ class SubcategoryUnitsResponse(BaseModel):
     units: list[UnitRecommendation]
 
 
+class SubcategoryUnitsGroup(SubcategoryUnitsResponse):
+    major_category_name: str | None = None
+    middle_category_name: str | None = None
+    minor_category_name: str | None = None
+
+
+class BulkSubcategoryUnitsResponse(BaseModel):
+    requested_patterns: list[str]
+    resolved_subcategory_codes: list[str]
+    subcategories: list[SubcategoryUnitsGroup]
+    units: list[UnitRecommendation]
+
+
 class JobUnitsResponse(BaseModel):
     job_name: str
     units: list[UnitRecommendation]
+
+
+class SearchExampleQuery(BaseModel):
+    example_id: int
+    example_text: str
+    display_order: int = 0
+    description: str | None = None
+
+
+class UnitMatrixSubcategory(BaseModel):
+    subcategory_code: str
+    subcategory_name: str
+
+
+class UnitMatrixUnitItem(BaseModel):
+    subcategory_code: str
+    subcategory_name: str
+    unit_category_id: str
+    unit_name: str
+    level: str
+    level_num: int | None = None
+    selected: bool = False
+
+
+class SuggestedMinorCategoryResponse(BaseModel):
+    minor_category_name: str | None = None
+
+
+class UnitMatrixResponse(BaseModel):
+    minor_category_name: str | None = None
+    subcategories: list[UnitMatrixSubcategory]
+    levels: list[str]
+    units: list[UnitMatrixUnitItem]
+    total_units: int
 
 
 class ErrorResponse(BaseModel):

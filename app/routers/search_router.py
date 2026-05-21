@@ -1,18 +1,34 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from app.schemas.search_schema import (
     ErrorResponse,
     FullSearchResponse,
     JobRecommendation,
     QueryRequest,
+    SearchExampleQuery,
     SubcategoryRecommendation,
     UnitRecommendation,
 )
+from app.services.example_query_service import list_search_example_queries
 from app.services.search_service import search_full, search_jobs, search_subcategories, search_units
 
 router = APIRouter(prefix="/api/search", tags=["search"])
+
+
+@router.get(
+    "/examples",
+    response_model=list[SearchExampleQuery],
+    responses={500: {"model": ErrorResponse}},
+)
+def search_examples(response: Response, limit: int = 12) -> list[dict]:
+    try:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        return list_search_example_queries(limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"example query lookup failed: {exc}") from exc
 
 
 @router.post("/full", response_model=FullSearchResponse, responses={500: {"model": ErrorResponse}})

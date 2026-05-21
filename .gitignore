@@ -2,3 +2,10 @@
 __pycache__/
 *.pyc
 .env
+.env.railway
+backups/
+.vscode/
+*.csv
+ncs_units.zip
+reports/
+*.hwpx

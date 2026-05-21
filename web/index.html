@@ -1,10 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NCS Search Web</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260522-matrix-jds3" />
   </head>
   <body>
     <header class="header">
@@ -14,27 +19,36 @@
         <button id="tabNaturalBtn" class="tab">자연어로 찾기</button>
       </nav>
       <div class="auth">
-        <span id="modeBadge" class="badge">게스트 모드</span>
-        <button id="modeToggleBtn" class="small-btn">회원 모드 전환</button>
+        <span id="authStatusBadge" class="badge">게스트</span>
+        <button id="myUnitsBtn" class="small-btn hidden" type="button">내 능력단위</button>
+        <button id="unitMatrixBtn" class="small-btn hidden" type="button">능력단위구조도</button>
+        <button id="loginBtn" class="small-btn" type="button">로그인</button>
+        <button id="logoutBtn" class="small-btn hidden" type="button">로그아웃</button>
       </div>
     </header>
 
     <main>
       <section id="categoryTab" class="tab-page active">
-        <div class="grid3">
-          <aside class="panel">
+        <div class="grid-workspace">
+          <aside class="panel panel-tree">
             <h3>NCS 분류 트리</h3>
+            <p class="tree-hint">
+              <span class="tree-hint-icon">▶</span>
+              <strong>세분류</strong>(8자리 코드)만 선택할 수 있습니다. 대·중·소분류는 안내용입니다.
+            </p>
             <input id="treeFilterInput" class="input" placeholder="분류명 검색" />
             <div id="categoryTree" class="tree"></div>
           </aside>
-          <section class="panel">
-            <h3>선택 분류 상세</h3>
-            <div id="categoryDetail" class="detail-empty">세분류를 선택하세요.</div>
-            <button id="jumpToNaturalBtn" class="primary-btn" disabled>자연어 검색으로 확장</button>
+          <section class="panel panel-units">
+            <h3 class="detail-heading">
+              <span class="detail-heading-label">세분류별 능력단위</span>
+              <span id="categoryDetailHierarchy" class="ncs-hierarchy-inline hidden"></span>
+            </h3>
+            <div id="categoryUnitDetail" class="detail-body detail-empty">왼쪽 트리에서 세분류를 선택하세요.</div>
           </section>
-          <section class="panel">
-            <h3>세분류별 능력단위</h3>
-            <div id="subcategoryUnits" class="list"></div>
+          <section class="panel panel-structure">
+            <h3>능력단위구조</h3>
+            <div id="categoryUnitStructure" class="detail-body detail-empty">가운데 목록에서 능력단위를 선택하세요.</div>
           </section>
         </div>
       </section>
@@ -44,16 +58,11 @@
           <input id="queryInput" class="input hero-input" placeholder="예: 총무팀에서 급여계산 업무를 수행하고 있어" />
           <button id="searchBtn" class="primary-btn">검색</button>
           <button id="downloadBtn" class="small-btn">기본 NCS 다운로드</button>
-          <div class="chips">
-            <button class="chip">근태관리 업무</button>
-            <button class="chip">회의 준비</button>
-            <button class="chip">고객 비대면 상담</button>
-            <button class="chip">자동차 조립공정 작업</button>
-          </div>
+          <div id="exampleChips" class="chips"></div>
         </div>
 
-        <div class="grid2">
-          <section class="panel">
+        <div class="grid-workspace natural-workspace">
+          <section class="panel panel-results">
             <h3>결과</h3>
             <div class="result-tabs">
               <button data-result-tab="full" class="result-tab active">통합</button>
@@ -63,25 +72,119 @@
             </div>
             <div id="resultList" class="list"></div>
           </section>
-          <section class="panel">
-            <h3>상세</h3>
-            <div id="resultDetail" class="detail-empty">결과 카드를 선택하세요.</div>
+          <section class="panel panel-units">
+            <h3 class="detail-heading">
+              <span class="detail-heading-label">상세</span>
+              <span id="resultDetailHierarchy" class="ncs-hierarchy-inline hidden"></span>
+            </h3>
+            <div id="naturalUnitDetail" class="detail-body detail-empty">결과 카드를 선택하세요.</div>
           </section>
+          <section class="panel panel-structure">
+            <h3>능력단위구조</h3>
+            <div id="naturalUnitStructure" class="detail-body detail-empty">상세 목록에서 능력단위를 선택하세요.</div>
+          </section>
+        </div>
+      </section>
+
+      <section id="unitMatrixTab" class="tab-page">
+        <div class="panel panel-matrix">
+          <div class="matrix-toolbar">
+            <h3>능력단위구조도</h3>
+            <button id="matrixExportBtn" class="small-btn" type="button">엑셀 다운로드</button>
+            <button id="matrixRefreshBtn" class="small-btn" type="button">새로고침</button>
+            <p id="matrixScopeHint" class="matrix-scope-hint">내가 선택한 능력단위가 있는 세분류만 표시됩니다.</p>
+            <p class="matrix-legend">
+              <span class="matrix-legend-item matrix-legend-unselected">미선택</span>
+              <span class="matrix-legend-item matrix-legend-selected">선택(내 능력단위)</span>
+              · 능력단위명 클릭: 저장(회색) · 이름 옆 인쇄 아이콘: 직무기술서
+            </p>
+          </div>
+          <div id="unitMatrixContainer" class="unit-matrix-container detail-empty">
+            저장한 능력단위가 없습니다. 검색·분류 화면에서 능력단위를 저장한 뒤 다시 열어주세요.
+          </div>
         </div>
       </section>
     </main>
 
-    <div id="memberModal" class="modal hidden">
-      <div class="modal-content">
-        <h3>회원 전용 기능</h3>
-        <p>능력단위 구조도 조회는 회원 모드에서 사용할 수 있습니다.</p>
-        <div class="modal-actions">
-          <button id="memberSwitchBtn" class="primary-btn">회원 모드 전환</button>
-          <button id="memberCloseBtn" class="small-btn">닫기</button>
+    <div id="authModal" class="modal hidden" role="dialog" aria-labelledby="authModalTitle">
+      <div class="modal-content modal-content-wide">
+        <div id="loginView">
+          <h3 id="authModalTitle">로그인</h3>
+          <p class="auth-hint">이메일로 로그인합니다. 가입 이력이 없으면 회원가입을 이용하세요.</p>
+          <label class="auth-label">이메일</label>
+          <input id="loginEmail" class="input" type="email" autocomplete="username" />
+          <label class="auth-label">비밀번호</label>
+          <input id="loginPassword" class="input" type="password" autocomplete="current-password" />
+          <p id="loginError" class="auth-error hidden"></p>
+          <div class="modal-actions auth-actions">
+            <button id="loginSubmitBtn" class="primary-btn" type="button">로그인</button>
+            <button id="goSignupBtn" class="small-btn" type="button">회원가입</button>
+            <button id="authCloseBtn" class="small-btn" type="button">닫기</button>
+          </div>
+        </div>
+        <div id="signupView" class="hidden">
+          <h3>회원가입</h3>
+          <p class="auth-hint">최소한의 개인정보와 기업·부서 정보를 입력합니다.</p>
+          <label class="auth-label">이메일 <span class="auth-required">*</span></label>
+          <input id="signupEmail" class="input" type="email" autocomplete="username" />
+          <label class="auth-label">비밀번호 (8자 이상) <span class="auth-required">*</span></label>
+          <input id="signupPassword" class="input" type="password" autocomplete="new-password" />
+          <label class="auth-label">이름 <span class="auth-required">*</span></label>
+          <input id="signupFullName" class="input" type="text" autocomplete="name" />
+          <label class="auth-label">연락처 (선택)</label>
+          <input id="signupPhone" class="input" type="tel" autocomplete="tel" />
+          <label class="auth-label">기업명 <span class="auth-required">*</span></label>
+          <input id="signupCompany" class="input" type="text" />
+          <label class="auth-label">부서명 <span class="auth-required">*</span></label>
+          <input id="signupDepartment" class="input" type="text" />
+          <p id="signupError" class="auth-error hidden"></p>
+          <div class="modal-actions auth-actions">
+            <button id="signupSubmitBtn" class="primary-btn" type="button">가입하기</button>
+            <button id="goLoginBtn" class="small-btn" type="button">로그인으로</button>
+            <button id="signupCloseBtn" class="small-btn" type="button">닫기</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <div id="guestFeatureModal" class="modal hidden">
+      <div class="modal-content">
+        <h3>회원 전용 기능</h3>
+        <p id="guestFeatureMessage">로그인 후 이용할 수 있습니다.</p>
+        <div class="modal-actions">
+          <button id="guestFeatureLoginBtn" class="primary-btn" type="button">로그인</button>
+          <button id="guestFeatureSignupBtn" class="small-btn" type="button">회원가입</button>
+          <button id="guestFeatureCloseBtn" class="small-btn" type="button">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="myUnitsModal" class="modal hidden">
+      <div class="modal-content modal-content-wide">
+        <h3>내가 선택한 능력단위</h3>
+        <p class="auth-hint">저장한 능력단위 코드를 관리합니다.</p>
+        <div id="myUnitsList" class="my-units-list detail-empty">불러오는 중...</div>
+        <div class="modal-actions">
+          <button id="myUnitsExportBtn" class="small-btn hidden" type="button">엑셀 다운로드</button>
+          <button id="myUnitsPrintAllJdsBtn" class="small-btn hidden" type="button">직무기술서 일괄 인쇄</button>
+          <button id="myUnitsCloseBtn" class="small-btn" type="button">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="jobDescriptionModal" class="modal hidden">
+      <div class="modal-content modal-content-jds">
+        <div class="jds-toolbar no-print">
+          <button id="jdsMatrixBtn" class="small-btn" type="button">능력단위구조도</button>
+          <div class="jds-toolbar-spacer"></div>
+          <button id="jdsPrintBtn" class="small-btn" type="button">PDF출력</button>
+          <button id="jdsPrintAllBtn" class="small-btn hidden" type="button">PDF출력(All)</button>
+          <button id="jdsCloseBtn" class="small-btn" type="button">닫기</button>
+        </div>
+        <div id="jobDescriptionBody" class="jds-body detail-empty">불러오는 중...</div>
+      </div>
+    </div>
+
+    <script src="/static/app.js?v=20260522-railway1"></script>
   </body>
 </html>

@@ -21,11 +21,14 @@ def _get_raw(path: str, headers: dict[str, str] | None = None) -> tuple[int, byt
         return response.status, response.read()
 
 
-def _post(path: str, payload: dict[str, Any]) -> tuple[int, Any]:
+def _post(path: str, payload: dict[str, Any], headers: dict[str, str] | None = None) -> tuple[int, Any]:
+    req_headers = {"Content-Type": "application/json"}
+    if headers:
+        req_headers.update(headers)
     req = urllib.request.Request(
         f"{BASE_URL}{path}",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=req_headers,
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=20) as response:
@@ -73,22 +76,68 @@ def run_smoke_test() -> None:
     _assert(status == 200, "ncs tree status must be 200")
     _assert(isinstance(ncs_tree, list), "ncs tree response must be list")
 
+    status, examples = _get("/api/search/examples?limit=12")
+    _assert(status == 200, "search examples status must be 200")
+    _assert(isinstance(examples, list), "search examples response must be list")
+    _assert(len(examples) > 0, "search examples must not be empty")
+
+    status, bulk = _get("/api/subcategories/units-by-patterns?codes=020201,020203")
+    _assert(status == 200, "units-by-patterns status must be 200")
+    _assert(isinstance(bulk.get("subcategories"), list), "bulk response missing subcategories")
+    _assert(len(bulk.get("subcategories") or []) > 0, "bulk subcategories must not be empty")
+    _assert(len(bulk.get("units") or []) > 0, "bulk units must not be empty")
+
     if units:
         unit_category_id = units[0].get("unit_category_id")
         if unit_category_id:
             try:
                 _get_raw(f"/api/units/{unit_category_id}/structure")
-                raise AssertionError("guest mode unit structure should not return 200")
+                raise AssertionError("guest unit structure should not return 200")
             except urllib.error.HTTPError as exc:
-                _assert(exc.code == 401, "guest mode unit structure must return 401")
+                _assert(exc.code == 401, "guest unit structure must return 401")
+
+            test_email = "smoke_test_user@example.local"
+            test_password = "smoke_test_pass_123"
+            try:
+                _post(
+                    "/api/auth/register",
+                    {
+                        "email": test_email,
+                        "password": test_password,
+                        "full_name": "스모크테스트",
+                        "company_name": "테스트회사",
+                        "department_name": "테스트팀",
+                    },
+                )
+            except urllib.error.HTTPError:
+                pass
+
+            status, auth = _post(
+                "/api/auth/login",
+                {"email": test_email, "password": test_password},
+            )
+            _assert(status == 200, "auth login status must be 200")
+            token = auth.get("access_token")
+            _assert(bool(token), "auth login must return access_token")
 
             status, structure_raw = _get_raw(
                 f"/api/units/{unit_category_id}/structure",
-                headers={"X-User-Mode": "member"},
+                headers={"Authorization": f"Bearer {token}"},
             )
-            _assert(status == 200, "member mode unit structure status must be 200")
+            _assert(status == 200, "logged-in unit structure status must be 200")
             structure = json.loads(structure_raw.decode("utf-8"))
             _assert("elements" in structure, "unit structure response missing elements")
+
+            status, saved = _post(
+                "/api/me/units",
+                {
+                    "unit_category_id": unit_category_id,
+                    "unit_name": units[0].get("unit_name"),
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            _assert(status == 200, "save user unit status must be 200")
+            _assert(saved.get("unit_category_id") == unit_category_id, "saved unit id mismatch")
 
     status, csv_raw = _get_raw("/api/download/basic-ncs")
     _assert(status == 200, "basic ncs download status must be 200")

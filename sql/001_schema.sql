@@ -249,6 +249,19 @@ CREATE TABLE IF NOT EXISTS T26_SEARCH_TEST_CASES (
 );
 
 -- =====================================================
+-- 11-1. T28_SEARCH_EXAMPLE_QUERIES (자연어 검색 예시 질문)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS T28_SEARCH_EXAMPLE_QUERIES (
+    example_id SERIAL PRIMARY KEY,
+    example_text TEXT NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
 -- 12. T27_NCS_EMBEDDINGS
 -- =====================================================
 CREATE TABLE IF NOT EXISTS T27_NCS_EMBEDDINGS (
@@ -376,6 +389,10 @@ ON T24_JOB_UNIT_MAPPING(standard_job_name);
 
 CREATE INDEX IF NOT EXISTS idx_t24_unit_category_id
 ON T24_JOB_UNIT_MAPPING(unit_category_id);
+
+-- T28
+CREATE INDEX IF NOT EXISTS idx_t28_example_active_order
+ON T28_SEARCH_EXAMPLE_QUERIES(is_active, display_order, example_id);
 
 -- T25
 CREATE INDEX IF NOT EXISTS idx_t25_id_t11

@@ -15,6 +15,9 @@ class Settings:
     db_password: str
     app_name: str
     app_version: str
+    jwt_secret: str
+    jwt_algorithm: str
+    jwt_expire_minutes: int
 
 
 def load_settings() -> Settings:
@@ -30,4 +33,7 @@ def load_settings() -> Settings:
         db_password=os.getenv("DB_PASSWORD", "postgres"),
         app_name=os.getenv("APP_NAME", "NCS Search API"),
         app_version=os.getenv("APP_VERSION", "0.1.0"),
+        jwt_secret=os.getenv("JWT_SECRET", "dev-only-change-in-production"),
+        jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
+        jwt_expire_minutes=int(os.getenv("JWT_EXPIRE_MINUTES", "1440")),
     )
