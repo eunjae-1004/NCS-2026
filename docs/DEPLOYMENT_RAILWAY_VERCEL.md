@@ -1,5 +1,7 @@
 # Railway + Vercel 배포 구조
 
+전체 레이어망은 **[SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)** §2 참고.
+
 NCS Search를 **Railway(DB + API)** 와 **Vercel(웹 UI)** 로 나눠 운영할 때의 구조·설정·역할을 정리합니다.
 
 ---

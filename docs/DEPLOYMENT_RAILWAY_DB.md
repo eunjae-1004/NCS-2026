@@ -1,5 +1,7 @@
 # Railway PostgreSQL — 스키마 적용 및 기존 DB 데이터 이전
 
+배포·런타임 관점의 전체 그림은 **[SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)** 를 참고하세요.
+
 로컬/회사 PostgreSQL에 쌓인 데이터를 **Railway PostgreSQL**로 옮기는 절차입니다.
 
 ---

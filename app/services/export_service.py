@@ -75,6 +75,78 @@ def _list_unit_ids_in_subcategories(sub_codes: list[str]) -> list[str]:
         return [str(row) for row in conn.execute(text(sql), {"sub_codes": sub_codes}).scalars().all()]
 
 
+def _fetch_selected_definition_rows(user_id: int) -> pd.DataFrame:
+    """
+    회원이 저장한 능력단위만 — 세분류·능력단위 정의 포함(요약 다운로드용).
+    """
+    sql = """
+    SELECT
+        t30.unit_category_id,
+        COALESCE(NULLIF(trim(t30.unit_name), ''), ui.unit_name) AS unit_name,
+        COALESCE(NULLIF(trim(t30.subcategory_code), ''), ui.subcategory_code) AS subcategory_code,
+        COALESCE(NULLIF(trim(t30.subcategory_name), ''), ui.subcategory_name) AS subcategory_name,
+        ui.minor_category_name,
+        ui.middle_category_name,
+        ui.major_category_name,
+        ui.level AS level,
+        (
+            SELECT td.subcategory_definition
+            FROM T14_SUBCATEGORY_DEFINITIONS td
+            WHERE td.subcategory_code = COALESCE(
+                NULLIF(trim(t30.subcategory_code), ''),
+                ui.subcategory_code
+            )
+            ORDER BY td.id_t14 DESC NULLS LAST
+            LIMIT 1
+        ) AS subcategory_definition,
+        (
+            SELECT udp.unit_definition
+            FROM T15_UNIT_DEFINITIONS udp
+            WHERE udp.unit_category_id = t30.unit_category_id
+            ORDER BY udp.id_t15 DESC NULLS LAST
+            LIMIT 1
+        ) AS unit_definition,
+        t30.created_at AS saved_at
+    FROM T30_USER_UNIT_SELECTIONS t30
+    LEFT JOIN LATERAL (
+        SELECT
+            unit_name,
+            subcategory_code,
+            subcategory_name,
+            minor_category_name,
+            middle_category_name,
+            major_category_name,
+            level
+        FROM T11_NCS_UNITS t11_ui
+        WHERE t11_ui.unit_category_id = t30.unit_category_id
+        ORDER BY t11_ui.id_t11 ASC
+        LIMIT 1
+    ) ui ON TRUE
+    WHERE t30.user_id = :user_id
+    ORDER BY COALESCE(ui.subcategory_code, t30.subcategory_code),
+             t30.unit_category_id
+    """
+    with get_connection() as conn:
+        rows = conn.execute(text(sql), {"user_id": user_id}).mappings().all()
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame([dict(row) for row in rows]).rename(
+        columns={
+            "unit_category_id": "능력단위분류번호",
+            "unit_name": "능력단위명",
+            "subcategory_code": "세분류코드",
+            "subcategory_name": "세분류명",
+            "minor_category_name": "소분류명",
+            "middle_category_name": "중분류명",
+            "major_category_name": "대분류명",
+            "level": "수준",
+            "subcategory_definition": "세분류정의",
+            "unit_definition": "능력단위정의",
+            "saved_at": "저장일시",
+        }
+    )
+
+
 def _fetch_elements(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
     sql = f"""
     SELECT DISTINCT
@@ -85,6 +157,20 @@ def _fetch_elements(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
         t11.unit_element_name,
         t11.subcategory_code,
         t11.subcategory_name,
+        (
+            SELECT td.subcategory_definition
+            FROM T14_SUBCATEGORY_DEFINITIONS td
+            WHERE td.subcategory_code = t11.subcategory_code
+            ORDER BY td.id_t14 DESC NULLS LAST
+            LIMIT 1
+        ) AS subcategory_definition,
+        (
+            SELECT udp.unit_definition
+            FROM T15_UNIT_DEFINITIONS udp
+            WHERE udp.unit_category_id = t11.unit_category_id
+            ORDER BY udp.id_t15 DESC NULLS LAST
+            LIMIT 1
+        ) AS unit_definition,
         t11.minor_category_name,
         t11.middle_category_name,
         t11.major_category_name,
@@ -115,6 +201,8 @@ def _fetch_elements(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
             "unit_element_name": "능력단위요소명",
             "subcategory_code": "세분류코드",
             "subcategory_name": "세분류명",
+            "subcategory_definition": "세분류정의",
+            "unit_definition": "능력단위정의",
             "minor_category_name": "소분류명",
             "middle_category_name": "중분류명",
             "major_category_name": "대분류명",
@@ -334,7 +422,7 @@ def _build_meta_rows(
             "항목": "데이터범위",
             "값": "모든 시트: 저장 능력단위가 속한 세분류 전체, 선택여부 Y/N=내 선택",
         },
-        {"항목": "데이터출처", "값": "T11/T12/T13/T15, T30(선택여부)"},
+        {"항목": "데이터출처", "값": "T11/T12/T13/T14/T15, T30(선택여부 및 선택_정의요약 시트)"},
     ]
 
 
@@ -357,12 +445,16 @@ def _export_filenames(user: dict) -> tuple[str, str]:
 
 def build_user_units_excel(user_id: int) -> tuple[bytes, str, str]:
     """
-    저장 능력단위가 속한 세분류의 **전체** 능력단위·요소를보내고,
-    내가 선택한 능력단위는 선택여부(Y/N)로 표시한다.
+    저장한 능력단위 기준으로 엑셀을 만든다.
+
+    - **선택_정의요약**: 내가 선택한 능력단위만 행으로, T14 세분류정의·T15 능력단위정의 포함.
+    - **선택요소_상세** 이하: 저장 능력단위가 속한 세분류의 전체 요소·준거 등(선택여부 Y/N).
+      상세 시트에도 동일 정의 컬럼을 붙인다.
     """
     sub_codes, selected_ids = _resolve_export_scope(user_id)
     user = get_user_by_id(user_id) or {}
 
+    df_selected_defs = _fetch_selected_definition_rows(user_id)
     df_elements = _fetch_elements(user_id, sub_codes)
     df_criteria = _fetch_criteria(user_id, sub_codes)
     df_ksa = _fetch_ksa(user_id, sub_codes)
@@ -376,6 +468,7 @@ def build_user_units_excel(user_id: int) -> tuple[bytes, str, str]:
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         sheets: list[tuple[str, pd.DataFrame]] = [
+            ("선택_정의요약", df_selected_defs),
             ("선택요소_상세", df_elements),
             ("수행준거", df_criteria),
             ("KSA", df_ksa),

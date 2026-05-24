@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError, ProgrammingError
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
@@ -17,8 +19,10 @@ from app.services.user_service import (
     list_user_unit_selections,
     remove_user_unit_selection,
 )
+from app.utils.logger import get_logger
 
 router = APIRouter(prefix="/api/me", tags=["me"])
+_log = get_logger("ncs-me-router")
 
 
 def _selection_response(row: dict) -> UserUnitSelectionResponse:
@@ -80,15 +84,49 @@ def save_my_unit(
 ) -> UserUnitSelectionResponse:
     if current_user.user_id <= 0:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    row = add_user_unit_selection(
-        current_user.user_id,
-        {
-            "unit_category_id": payload.unit_category_id.strip(),
-            "unit_name": payload.unit_name,
-            "subcategory_code": payload.subcategory_code,
-            "subcategory_name": payload.subcategory_name,
-        },
-    )
+    try:
+        row = add_user_unit_selection(
+            current_user.user_id,
+            {
+                "unit_category_id": payload.unit_category_id.strip(),
+                "unit_name": payload.unit_name,
+                "subcategory_code": payload.subcategory_code,
+                "subcategory_name": payload.subcategory_name,
+            },
+        )
+    except IntegrityError as exc:
+        pgmsg = getattr(getattr(exc, "orig", None), "pgerror", None) or str(exc)
+        _log.warning("save_my_unit integrity/FK 또는 PK 오류: %s", pgmsg)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "DB 무결성 제약으로 저장할 수 없습니다. CSV 임포트 후에는 "
+                "PostgreSQL에서 sql/005_fix_serial_sequences_after_import.sql(특히 T29·T30)을 "
+                "실행했는지 확인하거나, 로그인 사용자와 T29 회원 행 일치 여부를 확인해 주세요."
+            ),
+        ) from exc
+    except ProgrammingError as exc:
+        pgmsg = getattr(getattr(exc, "orig", None), "pgerror", None) or str(exc)
+        lowered = pgmsg.lower()
+        if (
+            "on conflict" in lowered
+            or "unique or exclusion constraint" in lowered
+            or "42p10" in lowered
+        ):
+            _log.warning("T30 ON CONFLICT error (missing UNIQUE?): %s", pgmsg)
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "DB에 T30(user_id, unit_category_id) UNIQUE 제약이 없어 저장할 수 없습니다. "
+                    "Railway Postgres에서 sql/006_t30_unique_constraint_for_upsert.sql 을 실행하세요."
+                ),
+            ) from exc
+        _log.exception("save_my_unit DB error")
+        raise HTTPException(
+            status_code=500,
+            detail="능력단위 저장 중 DB 오류가 발생했습니다. 관리자에게 문의하세요.",
+        ) from exc
+
     return _selection_response(row)
 
 

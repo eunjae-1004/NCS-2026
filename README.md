@@ -1,4 +1,8 @@
-# NCS Search (초기 1단계)
+# NCS Search
+
+**전체 시스템 구성·운영 흐름·SQL 적용 순서**는 **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)** 에 정리되어 있습니다.
+
+---
 
 사용자가 부서명, 직무명, 직무 설명, 복합 문장을 입력하면  
 세분류 -> 직무 -> 능력단위 순서로 추천하는 PostgreSQL 기반 검색 프로젝트입니다.
@@ -210,16 +214,14 @@ Jupyter 환경에서 아래 노트북을 열어 셀 순서대로 실행하세요
 
 ### 6-3. API 목록
 
+전체 라우터는 [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) §6을 참고하세요. Swagger UI(`/docs`)에서 최신 목록을 확인할 수 있습니다.
+
+**요약:**
+
 - `GET /api/health`
-- `POST /api/search/full`
-- `POST /api/search/subcategories`
-- `POST /api/search/jobs`
-- `POST /api/search/units`
-- `GET /api/subcategories/{subcategory_code}/units`
-- `GET /api/jobs/{job_name}/units`
-- `GET /api/ncs/tree`
-- `GET /api/units/{unit_category_id}/structure` (회원 모드 전용, `X-User-Mode: member`)
-- `GET /api/download/basic-ncs`
+- `/api/auth/*` (회원가입·로그인 등)
+- `/api/me/*` (회원 능력단위·매트릭·엑셀)
+- `POST /api/search/full` 및 검색 분해 API
 
 ### 6-4. 요청 예시
 

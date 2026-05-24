@@ -1,5 +1,7 @@
 # NCS Search 배포 가이드 (회사 PostgreSQL + Railway)
 
+구성 요소 간 관계와 테이블 맵은 **[SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)** 를 먼저 보는 것이 좋습니다.
+
 이 문서는 **회사 서버 PostgreSQL**을 DB로 두고, **Railway**에서 FastAPI + 웹 UI를 운영하는 절차를 정리합니다.  
 (Vercel 없이 Railway 단독 — `app/main.py`가 `/`·`/static`·`/api`를 모두 제공)
 
