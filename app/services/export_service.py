@@ -18,6 +18,22 @@ CASE WHEN t30.unit_category_id IS NOT NULL THEN 'Y' ELSE 'N' END AS selected_yn
 """
 
 
+def _sort_y_first_choice(df: pd.DataFrame, col: str = "선택여부") -> pd.DataFrame:
+    if df.empty or col not in df.columns:
+        return df
+    return df.sort_values(by=col, ascending=False, kind="stable")
+
+
+def _dedupe_dataframe(df: pd.DataFrame, subset: list[str]) -> pd.DataFrame:
+    if df.empty:
+        return df
+    cols = [c for c in subset if c in df.columns]
+    if not cols:
+        return df
+    out = _sort_y_first_choice(df.copy())
+    return out.drop_duplicates(subset=cols, keep="first")
+
+
 def _empty_workbook(message: str) -> bytes:
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -229,12 +245,6 @@ def _fetch_criteria(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
             WHERE t11.unit_category_id = t12.unit_category_id
             LIMIT 1
         ) AS subcategory_name,
-        (
-            SELECT DISTINCT t11.level
-            FROM T11_NCS_UNITS t11
-            WHERE t11.unit_category_id = t12.unit_category_id
-            LIMIT 1
-        ) AS level,
         t12.unit_category_id,
         (
             SELECT DISTINCT t11.unit_name
@@ -269,12 +279,11 @@ def _fetch_criteria(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
         ).mappings().all()
     if not rows:
         return pd.DataFrame()
-    return pd.DataFrame([dict(row) for row in rows]).rename(
+    df = pd.DataFrame([dict(row) for row in rows]).rename(
         columns={
             "selected_yn": "선택여부",
             "subcategory_code": "세분류코드",
             "subcategory_name": "세분류명",
-            "level": "수준",
             "unit_category_id": "능력단위분류번호",
             "unit_name": "능력단위명",
             "unit_element_id": "능력단위요소ID",
@@ -283,6 +292,20 @@ def _fetch_criteria(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
             "criteria_text": "수행준거내용",
             "base_year": "기준연도",
         }
+    )
+    return _dedupe_dataframe(
+        df,
+        [
+            "세분류코드",
+            "세분류명",
+            "능력단위분류번호",
+            "능력단위명",
+            "능력단위요소ID",
+            "능력단위요소명",
+            "수행준거번호",
+            "수행준거내용",
+            "기준연도",
+        ],
     )
 
 
@@ -302,12 +325,6 @@ def _fetch_ksa(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
             WHERE t11.unit_category_id = t13.unit_category_id
             LIMIT 1
         ) AS subcategory_name,
-        (
-            SELECT DISTINCT t11.level
-            FROM T11_NCS_UNITS t11
-            WHERE t11.unit_category_id = t13.unit_category_id
-            LIMIT 1
-        ) AS level,
         t13.unit_category_id,
         (
             SELECT DISTINCT t11.unit_name
@@ -335,12 +352,11 @@ def _fetch_ksa(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
         ).mappings().all()
     if not rows:
         return pd.DataFrame()
-    return pd.DataFrame([dict(row) for row in rows]).rename(
+    df = pd.DataFrame([dict(row) for row in rows]).rename(
         columns={
             "selected_yn": "선택여부",
             "subcategory_code": "세분류코드",
             "subcategory_name": "세분류명",
-            "level": "수준",
             "unit_category_id": "능력단위분류번호",
             "unit_name": "능력단위명",
             "unit_element_id": "능력단위요소ID",
@@ -348,6 +364,64 @@ def _fetch_ksa(user_id: int, sub_codes: list[str]) -> pd.DataFrame:
             "ksa_text": "KSA내용",
             "base_year": "기준연도",
         }
+    )
+    return _dedupe_dataframe(
+        df,
+        [
+            "세분류코드",
+            "세분류명",
+            "능력단위분류번호",
+            "능력단위명",
+            "능력단위요소ID",
+            "KSA구분",
+            "KSA내용",
+            "기준연도",
+        ],
+    )
+
+
+def _fetch_t31_evaluation_sheet(sub_codes: list[str]) -> pd.DataFrame:
+    """T31 평가시 주의사항(스코프 내 모든 능력단위). 테이블 미적용 시 빈 DataFrame."""
+    sql = """
+    SELECT
+        t31.unit_category_id,
+        COALESCE(NULLIF(trim(t31.unit_name), ''), (
+            SELECT DISTINCT t11.unit_name
+            FROM T11_NCS_UNITS t11
+            WHERE t11.unit_category_id = t31.unit_category_id
+            LIMIT 1
+        )) AS unit_name,
+        t31.item_name AS item_name,
+        t31.content_text AS content_text,
+        t31.excel_row_no AS excel_row_no
+    FROM T31_UNIT_EVALUATION_CONSIDERATIONS t31
+    INNER JOIN (
+        SELECT DISTINCT unit_category_id
+        FROM T11_NCS_UNITS
+        WHERE subcategory_code = ANY(:sub_codes)
+          AND coalesce(unit_category_id, '') <> ''
+    ) scope ON scope.unit_category_id = t31.unit_category_id
+    ORDER BY t31.unit_category_id, t31.excel_row_no NULLS LAST, t31.id_t31
+    """
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(text(sql), {"sub_codes": sub_codes}).mappings().all()
+    except Exception:  # noqa: BLE001 — T31 미생성·스키마 차이
+        return pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame([dict(row) for row in rows])
+    return _dedupe_dataframe(
+        df.rename(
+            columns={
+                "unit_category_id": "능력단위분류번호",
+                "unit_name": "능력단위명",
+                "item_name": "항목",
+                "content_text": "내용",
+                "excel_row_no": "원본번호",
+            }
+        ),
+        ["능력단위분류번호", "항목", "내용"],
     )
 
 
@@ -422,7 +496,10 @@ def _build_meta_rows(
             "항목": "데이터범위",
             "값": "모든 시트: 저장 능력단위가 속한 세분류 전체, 선택여부 Y/N=내 선택",
         },
-        {"항목": "데이터출처", "값": "T11/T12/T13/T14/T15, T30(선택여부 및 선택_정의요약 시트)"},
+        {
+            "항목": "데이터출처",
+            "값": "T11/T12/T13/T14/T15/T31, T30(선택여부·선택_정의요약·평가시주의사항)",
+        },
     ]
 
 
@@ -450,6 +527,8 @@ def build_user_units_excel(user_id: int) -> tuple[bytes, str, str]:
     - **선택_정의요약**: 내가 선택한 능력단위만 행으로, T14 세분류정의·T15 능력단위정의 포함.
     - **선택요소_상세** 이하: 저장 능력단위가 속한 세분류의 전체 요소·준거 등(선택여부 Y/N).
       상세 시트에도 동일 정의 컬럼을 붙인다.
+    - **수행준거 / KSA**: 수준 컬럼 제외, 동일 행은 중복 제거(선택여부 Y 우선).
+    - **평가시주의사항**: 스코프 내 T31(미적재 시 안내 시트만).
     """
     sub_codes, selected_ids = _resolve_export_scope(user_id)
     user = get_user_by_id(user_id) or {}
@@ -458,6 +537,7 @@ def build_user_units_excel(user_id: int) -> tuple[bytes, str, str]:
     df_elements = _fetch_elements(user_id, sub_codes)
     df_criteria = _fetch_criteria(user_id, sub_codes)
     df_ksa = _fetch_ksa(user_id, sub_codes)
+    df_eval_sheet = _fetch_t31_evaluation_sheet(sub_codes)
     df_jobs = pd.DataFrame(_build_job_summary_rows(sub_codes, selected_ids))
     df_matrix = pd.DataFrame(_build_matrix_rows(user_id))
     total_units = _count_units_in_subcategories(sub_codes)
@@ -472,6 +552,7 @@ def build_user_units_excel(user_id: int) -> tuple[bytes, str, str]:
             ("선택요소_상세", df_elements),
             ("수행준거", df_criteria),
             ("KSA", df_ksa),
+            ("평가시주의사항", df_eval_sheet),
             ("직무기술서_요약", df_jobs),
             ("구조도_매핑", df_matrix),
             ("다운로드_정보", df_meta),

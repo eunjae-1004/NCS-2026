@@ -6,6 +6,7 @@ import re
 from sqlalchemy import text
 
 from app.db import get_connection
+from app.services.evaluation_considerations_service import evaluation_sections_for_response
 
 
 def _normalize_ksa_bucket(ksa_type: str) -> str:
@@ -159,4 +160,5 @@ def get_job_description(unit_category_id: str) -> dict | None:
         "knowledge": knowledge,
         "skills": skills,
         "attitudes": attitudes,
+        "evaluation_sections": evaluation_sections_for_response(uid),
     }

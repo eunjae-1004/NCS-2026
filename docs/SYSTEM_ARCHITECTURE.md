@@ -104,6 +104,7 @@ docs/                   # 배포·본 아키텍처 문서
 | 로그·예시 | `T28_*` | 검색 로그, 예시 질문 등 |
 | 회원 | `T29_APP_USERS` | 가입·로그인 주체 |
 | 선택 | `T30_USER_UNIT_SELECTIONS` | 회원별 저장 능력단위(upsert) |
+| 평가 고려사항 | `T31_UNIT_EVALUATION_CONSIDERATIONS` | 능력단위별 평가 시 고려사항(엑셀 `평가시유의사항.xlsx`) |
 
 **설계 규약(요지)**  
 - `T11` PK는 `id_t11`. `unit_element_id` 단독 UNIQUE는 쓰지 않는다.  
@@ -175,6 +176,7 @@ docs/                   # 배포·본 아키텍처 문서
 | `004_railway_service_schema.sql` | **Railway 빈 DB 1회** 권장 통합 스키마 |
 | `005_fix_serial_sequences_after_import.sql` | CSV/덤프 임포트 후 **SERIAL 시퀀스 정렬**(T28, T11, T25, T29, T30 등) |
 | `006_t30_unique_constraint_for_upsert.sql` | `ON CONFLICT` 대상 UNIQUE가 없을 때만 추가 |
+| `007_t31_unit_evaluation_considerations.sql` | 능력단위 「평가 시 고려사항」(`T31`, 엑셀 평가시유의사항) |
 
 ---
 

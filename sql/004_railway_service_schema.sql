@@ -2,7 +2,7 @@
 -- NCS Search — Railway PostgreSQL 서비스 운영용 통합 스키마
 -- =============================================================================
 -- 대상: Railway PostgreSQL (빈 DB에 최초 1회 실행)
--- 포함: 확장 모듈, 테이블(T11~T30), 인덱스, 트리거, 예시 질문 시드(선택)
+-- 포함: 확장 모듈, 테이블(T11~T31), 인덱스, 트리거, 예시 질문 시드(선택)
 --
 -- 실행 방법 (Railway Query / psql):
 --   psql "$DATABASE_URL" -f sql/004_railway_service_schema.sql
@@ -283,6 +283,25 @@ CREATE TABLE IF NOT EXISTS T30_USER_UNIT_SELECTIONS (
 );
 
 -- -----------------------------------------------------------------------------
+-- 5b. 능력단위 평가 시 고려사항 (T31) — 엑셀 평가시유의사항.xlsx
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS T31_UNIT_EVALUATION_CONSIDERATIONS (
+    id_t31 SERIAL PRIMARY KEY,
+    excel_row_no INTEGER,
+    unit_category_id VARCHAR(50) NOT NULL,
+    unit_name VARCHAR(200),
+    item_name VARCHAR(150) NOT NULL,
+    content_text TEXT,
+    source_sheet_name VARCHAR(100) NOT NULL DEFAULT '평가시고려사항',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE T31_UNIT_EVALUATION_CONSIDERATIONS IS
+    'NCS 능력단위별 평가 시 고려사항(엑셀 평가시유의사항·시트 평가시고려사항)';
+
+-- -----------------------------------------------------------------------------
 -- 6. 기본 인덱스
 -- -----------------------------------------------------------------------------
 
@@ -335,6 +354,10 @@ CREATE INDEX IF NOT EXISTS idx_t28_example_active_order ON T28_SEARCH_EXAMPLE_QU
 CREATE INDEX IF NOT EXISTS idx_t29_email_active ON T29_APP_USERS(email) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_t30_user_id ON T30_USER_UNIT_SELECTIONS(user_id);
 CREATE INDEX IF NOT EXISTS idx_t30_unit_category_id ON T30_USER_UNIT_SELECTIONS(unit_category_id);
+
+-- T31
+CREATE INDEX IF NOT EXISTS idx_t31_unit_category_id ON T31_UNIT_EVALUATION_CONSIDERATIONS(unit_category_id);
+CREATE INDEX IF NOT EXISTS idx_t31_unit_item ON T31_UNIT_EVALUATION_CONSIDERATIONS(unit_category_id, item_name);
 
 -- -----------------------------------------------------------------------------
 -- 7. 검색 성능 인덱스 (trigram, scripts/optimize_db_indexes.py 와 동일)
@@ -437,6 +460,10 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_t29_updated_at') THEN
         CREATE TRIGGER trg_t29_updated_at BEFORE UPDATE ON T29_APP_USERS
+        FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_t31_updated_at') THEN
+        CREATE TRIGGER trg_t31_updated_at BEFORE UPDATE ON T31_UNIT_EVALUATION_CONSIDERATIONS
         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
     END IF;
 END $$;

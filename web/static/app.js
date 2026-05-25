@@ -1,5 +1,5 @@
 const state = {
-  authToken: localStorage.getItem("authToken") || "",
+  authToken: sessionStorage.getItem("authToken") || "",
   currentUser: null,
   savedUnitIds: new Set(),
   activeTab: "category",
@@ -78,7 +78,7 @@ function logout() {
   state.authToken = "";
   state.currentUser = null;
   state.savedUnitIds = new Set();
-  localStorage.removeItem("authToken");
+  sessionStorage.removeItem("authToken");
   updateAuthUi();
 }
 
@@ -172,7 +172,7 @@ async function submitLogin() {
       throw new Error(data.detail || "로그인에 실패했습니다.");
     }
     state.authToken = data.access_token;
-    localStorage.setItem("authToken", state.authToken);
+    sessionStorage.setItem("authToken", state.authToken);
     state.currentUser = data.user;
     updateAuthUi();
     await refreshSavedUnitIds();
@@ -215,7 +215,7 @@ async function submitSignup() {
     const data = await safeJson(res);
     if (!res.ok) throw new Error(data.detail || "회원가입에 실패했습니다.");
     state.authToken = data.access_token;
-    localStorage.setItem("authToken", state.authToken);
+    sessionStorage.setItem("authToken", state.authToken);
     state.currentUser = data.user;
     updateAuthUi();
     await refreshSavedUnitIds();
@@ -422,6 +422,17 @@ function buildJobDescriptionHtml(data) {
     })
     .join("");
 
+  const evalSectionsHtml = Array.isArray(data.evaluation_sections)
+    ? data.evaluation_sections
+        .filter((sec) => sec?.items?.length)
+        .map(
+          (sec) => `
+      <p class="jds-section-title">□ ${escapeHtml(sec.title)}</p>
+      ${buildJdsBulletList(sec.items)}`
+        )
+        .join("")
+    : "";
+
   return `
     <article class="jds-print-sheet" data-unit-id="${escapeHtml(data.unit_category_id)}">
       <h2 class="jds-title">직무기술서</h2>
@@ -478,6 +489,7 @@ function buildJobDescriptionHtml(data) {
           </tr>
         </tbody>
       </table>
+      ${evalSectionsHtml}
     </article>
   `;
 }
@@ -596,7 +608,7 @@ function buildMatrixUnitRow(unit, selected) {
   const attrs = ` data-unit-id="${escapeHtml(unitId)}" data-sub-code="${escapeHtml(unit.subcategory_code)}" data-sub-name="${escapeHtml(unit.subcategory_name)}" data-unit-name="${escapeHtml(unit.unit_name)}"`;
   const unitCls = selected ? "selected" : "unselected";
   const namePart = selected
-    ? `<span class="matrix-unit-name">${escapeHtml(unit.unit_name)}</span>`
+    ? `<span class="matrix-unit-name">${escapeHtml(unit.unit_name)}</span><button type="button" class="small-btn matrix-unit-delete no-print" data-unit-id="${escapeHtml(unitId)}">삭제</button>`
     : `<button type="button" class="matrix-unit-save clickable"${attrs}>${escapeHtml(unit.unit_name)}</button>`;
   return `
     <div class="matrix-unit-row">
@@ -715,6 +727,22 @@ async function renderUnitMatrix() {
           await apiPost("/api/me/units", payload);
           state.savedUnitIds.add(String(payload.unit_category_id));
           state.lastMatrixUnitId = String(payload.unit_category_id);
+          await renderUnitMatrix();
+        } catch (err) {
+          alert(err.message);
+          btn.disabled = false;
+        }
+      };
+    });
+
+    container.querySelectorAll(".matrix-unit-delete").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.stopPropagation();
+        const id = btn.dataset.unitId;
+        if (!id || !confirm("저장 목록에서 이 능력단위를 삭제할까요?")) return;
+        try {
+          btn.disabled = true;
+          await removeUnitFromMyList(id);
           await renderUnitMatrix();
         } catch (err) {
           alert(err.message);
@@ -980,14 +1008,19 @@ function buildUnitListHtml(units, selectedUnitId) {
       const isSelected = unitId && unitId === selectedUnitId;
       const unitDefinition = (unit.unit_definition || "").trim();
       const saved = state.savedUnitIds.has(unitId);
-      const saveBtn = isLoggedIn()
-        ? `<button type="button" class="small-btn unit-save-btn" data-unit-id="${escapeHtml(unitId)}">${saved ? "저장됨" : "저장"}</button>`
-        : "";
+      let actionsHtml = "";
+      if (isLoggedIn()) {
+        if (saved) {
+          actionsHtml = `<span class="unit-saved-label">저장됨</span><button type="button" class="small-btn danger-outline unit-remove-btn" data-unit-id="${escapeHtml(unitId)}">삭제</button>`;
+        } else {
+          actionsHtml = `<button type="button" class="small-btn unit-save-btn" data-unit-id="${escapeHtml(unitId)}">저장</button>`;
+        }
+      }
       return `
         <li class="unit-list-item ${isSelected ? "selected" : ""}" data-unit-id="${escapeHtml(unitId)}" role="button" tabindex="0">
           <div class="unit-list-item-head">
             <div class="unit-name ${isSelected ? "selected-name" : ""}"><b>${escapeHtml(unit.unit_name)}</b></div>
-            ${saveBtn}
+            ${actionsHtml}
           </div>
           <div class="meta">unit_category_id: ${escapeHtml(unitId)}</div>
           <div class="unit-definition-inline">
@@ -999,7 +1032,8 @@ function buildUnitListHtml(units, selectedUnitId) {
     .join("");
 }
 
-function attachUnitListHandlers(detailEl, units, hierarchyItem, structureEl) {
+function attachUnitListHandlers(detailEl, units, hierarchyItem, structureEl, meta = {}) {
+  const { refreshAfterListChange } = meta;
   detailEl.querySelectorAll(".unit-list-item").forEach((li) => {
     const activate = () => {
       const unitId = li.dataset.unitId;
@@ -1013,6 +1047,7 @@ function attachUnitListHandlers(detailEl, units, hierarchyItem, structureEl) {
     };
     li.onclick = (event) => {
       if (event.target.closest(".unit-save-btn")) return;
+      if (event.target.closest(".unit-remove-btn")) return;
       activate();
     };
     li.onkeydown = (event) => {
@@ -1030,11 +1065,35 @@ function attachUnitListHandlers(detailEl, units, hierarchyItem, structureEl) {
       const unit = units.find((row) => String(row.unit_category_id) === unitId);
       if (!unit) return;
       try {
+        btn.disabled = true;
         await saveUnitToMyList(unit, hierarchyItem);
-        btn.textContent = "저장됨";
-        alert("내 능력단위에 저장했습니다.");
+        await refreshSavedUnitIds();
+        if (typeof refreshAfterListChange === "function") {
+          await refreshAfterListChange();
+        }
       } catch (err) {
         alert(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  });
+
+  detailEl.querySelectorAll(".unit-remove-btn").forEach((btn) => {
+    btn.onclick = async (event) => {
+      event.stopPropagation();
+      const unitId = btn.dataset.unitId;
+      if (!unitId || !confirm("저장 목록에서 이 능력단위를 삭제할까요?")) return;
+      try {
+        btn.disabled = true;
+        await removeUnitFromMyList(unitId);
+        await refreshSavedUnitIds();
+        if (typeof refreshAfterListChange === "function") {
+          await refreshAfterListChange();
+        }
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
       }
     };
   });
@@ -1162,7 +1221,15 @@ async function renderMultiSubcategoryUnitsPanel(bulkData, panels, options = {}) 
     ${buildGroupedUnitListHtml(subcategories, selectedUnitId)}
   `;
 
-  attachUnitListHandlers(detailEl, allUnits, hierarchyItem, structureEl);
+  attachUnitListHandlers(detailEl, allUnits, hierarchyItem, structureEl, {
+    async refreshAfterListChange() {
+      await refreshSavedUnitIds();
+      await renderMultiSubcategoryUnitsPanel(bulkData, panels, {
+        ...options,
+        preferredUnitId: state.selectedUnitCategoryId || options.preferredUnitId,
+      });
+    },
+  });
 
   if (selectedUnitId) {
     state.selectedUnitCategoryId = selectedUnitId;
@@ -1303,7 +1370,9 @@ async function renderSubcategoryUnitsPanel(item, panels, options = {}) {
     return;
   }
 
-  const preferredId = String(context.unit_category_id || state.selectedUnitCategoryId || "");
+  const preferredId = String(
+    options.preferredUnitId ?? context.unit_category_id ?? state.selectedUnitCategoryId ?? ""
+  );
   const selectedUnitById = units.find((unit) => String(unit.unit_category_id) === preferredId);
   const selectedUnitByName = units.find(
     (unit) => String(unit.unit_name || "") === String(context.job_name || context.unit_name || "")
@@ -1331,7 +1400,15 @@ async function renderSubcategoryUnitsPanel(item, panels, options = {}) {
     <ul class="unit-list unit-list-clickable">${buildUnitListHtml(units, highlightSelected ? selectedUnitId : "")}</ul>
   `;
 
-  attachUnitListHandlers(detailEl, units, hierarchyItem, structureEl);
+  attachUnitListHandlers(detailEl, units, hierarchyItem, structureEl, {
+    async refreshAfterListChange() {
+      await refreshSavedUnitIds();
+      await renderSubcategoryUnitsPanel(hierarchyItem, getWorkspacePanels(), {
+        highlightSelected,
+        preferredUnitId: state.selectedUnitCategoryId,
+      });
+    },
+  });
 
   if (selectedUnitId) {
     state.selectedUnitCategoryId = selectedUnitId;
@@ -1397,7 +1474,8 @@ function jumpToCategory(code, options = {}) {
   setActiveTab("category");
   const filterInput = document.getElementById("treeFilterInput");
   if (filterInput) {
-    filterInput.value = subCode;
+    const label = String(options.name || "").trim();
+    filterInput.value = label;
     renderTree();
   }
 
@@ -1624,6 +1702,12 @@ function bindEvents() {
 }
 
 async function bootstrap() {
+  const legacy = localStorage.getItem("authToken");
+  if (legacy && !sessionStorage.getItem("authToken")) {
+    sessionStorage.setItem("authToken", legacy);
+    localStorage.removeItem("authToken");
+    state.authToken = legacy;
+  }
   localStorage.removeItem("userMode");
   updateAuthUi();
   bindEvents();
